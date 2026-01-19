@@ -1,0 +1,245 @@
+# Terraform State Migration Challenge - Automated Grading
+# ========================================================
+# This workflow validates student configurations.
+
+name: Grade Challenge
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  check-content:
+    name: Check Challenge Content
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Scenario 1 Files
+        id: scenario1-files
+        run: |
+          echo "Checking Scenario 1 files..."
+          SCORE=0
+          MAX=3
+
+          if [ -f "scenario-1-local-to-remote/backend.tf" ]; then
+            echo "backend.tf exists"
+            ((SCORE++))
+          else
+            echo "::warning::backend.tf not found"
+          fi
+
+          if [ -f "scenario-1-local-to-remote/main.tf" ]; then
+            echo "main.tf exists"
+            ((SCORE++))
+          else
+            echo "::warning::main.tf not found"
+          fi
+
+          if [ -f "scenario-1-local-to-remote/create-bucket.sh" ]; then
+            echo "create-bucket.sh exists"
+            ((SCORE++))
+          else
+            echo "::warning::create-bucket.sh not found"
+          fi
+
+          echo "Scenario 1 Files Score: $SCORE/$MAX"
+          echo "score=$SCORE" >> $GITHUB_OUTPUT
+          echo "max=$MAX" >> $GITHUB_OUTPUT
+
+      - name: Check Scenario 1 Content
+        id: scenario1-content
+        run: |
+          echo "Checking Scenario 1 content..."
+          SCORE=0
+          MAX=3
+
+          if grep -q 'backend "s3"' scenario-1-local-to-remote/backend.tf 2>/dev/null; then
+            echo "S3 backend configured"
+            ((SCORE++))
+          else
+            echo "::warning::S3 backend not configured"
+          fi
+
+          if grep -q 'bucket' scenario-1-local-to-remote/backend.tf 2>/dev/null; then
+            echo "Bucket specified"
+            ((SCORE++))
+          else
+            echo "::warning::Bucket not specified"
+          fi
+
+          if grep -q 'key' scenario-1-local-to-remote/backend.tf 2>/dev/null; then
+            echo "Key specified"
+            ((SCORE++))
+          else
+            echo "::warning::Key not specified"
+          fi
+
+          echo "Scenario 1 Content Score: $SCORE/$MAX"
+          echo "score=$SCORE" >> $GITHUB_OUTPUT
+          echo "max=$MAX" >> $GITHUB_OUTPUT
+
+      - name: Check Scenario 2 Files
+        id: scenario2-files
+        run: |
+          echo "Checking Scenario 2 files..."
+          SCORE=0
+          MAX=3
+
+          if [ -f "scenario-2-import/main.tf" ]; then
+            echo "main.tf exists"
+            ((SCORE++))
+          else
+            echo "::warning::main.tf not found"
+          fi
+
+          if [ -f "scenario-2-import/setup.sh" ]; then
+            echo "setup.sh exists"
+            ((SCORE++))
+          else
+            echo "::warning::setup.sh not found"
+          fi
+
+          if grep -q 'resource "aws_instance"' scenario-2-import/main.tf 2>/dev/null; then
+            echo "aws_instance resource found"
+            ((SCORE++))
+          else
+            echo "::warning::aws_instance resource not found"
+          fi
+
+          echo "Scenario 2 Files Score: $SCORE/$MAX"
+          echo "score=$SCORE" >> $GITHUB_OUTPUT
+          echo "max=$MAX" >> $GITHUB_OUTPUT
+
+      - name: Check Scenario 3 Files
+        id: scenario3-files
+        run: |
+          echo "Checking Scenario 3 files..."
+          SCORE=0
+          MAX=4
+
+          if [ -f "scenario-3-move/old-project/main.tf" ]; then
+            echo "old-project/main.tf exists"
+            ((SCORE++))
+          else
+            echo "::warning::old-project/main.tf not found"
+          fi
+
+          if [ -f "scenario-3-move/new-project/main.tf" ]; then
+            echo "new-project/main.tf exists"
+            ((SCORE++))
+          else
+            echo "::warning::new-project/main.tf not found"
+          fi
+
+          if [ -f "scenario-3-move/move-resources.sh" ]; then
+            echo "move-resources.sh exists"
+            ((SCORE++))
+          else
+            echo "::warning::move-resources.sh not found"
+          fi
+
+          if grep -q 'terraform state mv' scenario-3-move/move-resources.sh 2>/dev/null; then
+            echo "state mv command found"
+            ((SCORE++))
+          else
+            echo "::warning::state mv command not found"
+          fi
+
+          echo "Scenario 3 Files Score: $SCORE/$MAX"
+          echo "score=$SCORE" >> $GITHUB_OUTPUT
+          echo "max=$MAX" >> $GITHUB_OUTPUT
+
+      - name: Check Solutions
+        id: solutions
+        run: |
+          echo "Checking solutions..."
+          SCORE=0
+          MAX=2
+
+          if [ -f "solutions/scenario-1-backend.tf" ]; then
+            echo "scenario-1 solution exists"
+            ((SCORE++))
+          fi
+
+          if [ -f "solutions/scenario-2-main.tf" ]; then
+            echo "scenario-2 solution exists"
+            ((SCORE++))
+          fi
+
+          echo "Solutions Score: $SCORE/$MAX"
+          echo "score=$SCORE" >> $GITHUB_OUTPUT
+          echo "max=$MAX" >> $GITHUB_OUTPUT
+
+      - name: Check Support Files
+        id: support
+        run: |
+          echo "Checking support files..."
+          SCORE=0
+          MAX=2
+
+          if [ -f "docker-compose.yml" ]; then
+            echo "docker-compose.yml exists"
+            ((SCORE++))
+          fi
+
+          if [ -f "README.md" ]; then
+            echo "README.md exists"
+            ((SCORE++))
+          fi
+
+          echo "Support Files Score: $SCORE/$MAX"
+          echo "score=$SCORE" >> $GITHUB_OUTPUT
+          echo "max=$MAX" >> $GITHUB_OUTPUT
+
+      - name: Calculate Total Score
+        id: total
+        run: |
+          S1_FILES=${{ steps.scenario1-files.outputs.score || 0 }}
+          S1_FILES_MAX=${{ steps.scenario1-files.outputs.max || 3 }}
+          S1_CONTENT=${{ steps.scenario1-content.outputs.score || 0 }}
+          S1_CONTENT_MAX=${{ steps.scenario1-content.outputs.max || 3 }}
+          S2_FILES=${{ steps.scenario2-files.outputs.score || 0 }}
+          S2_FILES_MAX=${{ steps.scenario2-files.outputs.max || 3 }}
+          S3_FILES=${{ steps.scenario3-files.outputs.score || 0 }}
+          S3_FILES_MAX=${{ steps.scenario3-files.outputs.max || 4 }}
+          SOLUTIONS=${{ steps.solutions.outputs.score || 0 }}
+          SOLUTIONS_MAX=${{ steps.solutions.outputs.max || 2 }}
+          SUPPORT=${{ steps.support.outputs.score || 0 }}
+          SUPPORT_MAX=${{ steps.support.outputs.max || 2 }}
+
+          TOTAL=$((S1_FILES + S1_CONTENT + S2_FILES + S3_FILES + SOLUTIONS + SUPPORT))
+          MAX=$((S1_FILES_MAX + S1_CONTENT_MAX + S2_FILES_MAX + S3_FILES_MAX + SOLUTIONS_MAX + SUPPORT_MAX))
+          PERCENT=$((TOTAL * 100 / MAX))
+
+          echo "========================================"
+          echo "     CHALLENGE GRADING SUMMARY"
+          echo "========================================"
+          echo ""
+          echo "Scenario 1 Files:   $S1_FILES/$S1_FILES_MAX"
+          echo "Scenario 1 Content: $S1_CONTENT/$S1_CONTENT_MAX"
+          echo "Scenario 2 Files:   $S2_FILES/$S2_FILES_MAX"
+          echo "Scenario 3 Files:   $S3_FILES/$S3_FILES_MAX"
+          echo "Solutions:          $SOLUTIONS/$SOLUTIONS_MAX"
+          echo "Support Files:      $SUPPORT/$SUPPORT_MAX"
+          echo ""
+          echo "========================================"
+          echo "TOTAL SCORE: $TOTAL/$MAX ($PERCENT%)"
+          echo "========================================"
+
+          if [ $PERCENT -eq 100 ]; then
+            echo ""
+            echo "🎉 Congratulations! All checks passed!"
+          elif [ $PERCENT -ge 75 ]; then
+            echo ""
+            echo "Great progress! Almost there!"
+          fi
+
+          if [ $PERCENT -lt 75 ]; then
+            exit 1
+          fi

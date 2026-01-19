@@ -1,0 +1,32 @@
+# LocalStack for Terraform State Migration Challenge
+# ==================================================
+# This provides a local AWS environment for practicing without costs.
+#
+# Usage:
+#   docker-compose up -d      # Start LocalStack
+#   docker-compose down       # Stop LocalStack
+#   docker-compose logs -f    # View logs
+
+services:
+  localstack:
+    image: localstack/localstack:3.0
+    container_name: localstack-state-migration
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=ec2,s3,dynamodb,iam,sts,rds
+      - DEBUG=1
+      - PERSISTENCE=1
+      - DEFAULT_REGION=us-east-1
+      - LS_LOG=warn
+    volumes:
+      - localstack-state-migration-data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  localstack-state-migration-data:

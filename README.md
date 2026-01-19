@@ -1,0 +1,788 @@
+# Terraform State Migration
+
+## Master State Management, Migration, and Import
+
+Welcome to the **Terraform State Migration Challenge**! In real-world DevOps, you'll often need to migrate Terraform state between backends, import existing resources, and manage state across teams. This challenge teaches you essential state management skills.
+
+You'll learn how to:
+
+- Understand Terraform state structure
+- Migrate state from local to remote (S3)
+- Import existing AWS resources into Terraform
+- Move resources between state files
+- Handle state locking and recovery
+- Split and merge Terraform configurations
+
+---
+
+## 🚀 Quick Start
+
+> **GitHub Account Required** for grading and submission (Options A & B).
+> Don't have one? [Create a free GitHub account](https://github.com/signup) - it's free and essential for any DevOps career!
+>
+> Option C works without GitHub but you won't get automated grading.
+
+### Step 1: Get the Code
+
+**Option A: Fork (Easiest)**
+```bash
+# 1. Click "Fork" button on GitHub (top right of this page)
+# 2. Clone YOUR fork:
+git clone https://github.com/YOUR-USERNAME/terraform-state-migration.git
+cd terraform-state-migration
+```
+
+**Option B: Clone & Create Your Own Repo**
+```bash
+# 1. Clone this repo
+git clone https://github.com/techlearn-center/terraform-state-migration.git
+cd terraform-state-migration
+
+# 2. Remove the original remote
+git remote remove origin
+
+# 3. Create a new repo on GitHub (github.com/new)
+# 4. Add your new repo as origin
+git remote add origin https://github.com/YOUR-USERNAME/YOUR-REPO-NAME.git
+git push -u origin main
+```
+
+**Option C: Clone Only (Practice, No Grading)**
+```bash
+git clone https://github.com/techlearn-center/terraform-state-migration.git
+cd terraform-state-migration
+# Note: You won't be able to push or get GitHub Actions grading
+```
+
+### Step 2: Choose Your Path
+
+| Path | Best For | Requirements |
+|------|----------|--------------|
+| **LocalStack** | Learning, no cost | Docker, Terraform |
+| **Real AWS** | Production experience | AWS account, Terraform |
+
+### Step 3: Complete the Tasks
+
+```bash
+# For LocalStack:
+docker-compose up -d
+cd scenario-1-local-to-remote
+terraform init
+
+# For Real AWS:
+aws configure
+cd scenario-1-local-to-remote
+terraform init
+```
+
+### Step 4: Check Your Progress
+
+```bash
+python run.py                 # Local progress checker
+```
+
+### Step 5: Submit Your Work
+
+```bash
+git add .
+git commit -m "Complete terraform-state-migration challenge"
+git push origin main
+# Check GitHub Actions for your grade!
+```
+
+---
+
+## 📚 Table of Contents
+
+1. [Why State Migration?](#why-state-migration)
+2. [Understanding State Structure](#understanding-state-structure)
+3. [State Commands Deep Dive](#state-commands-deep-dive)
+4. [Migration Scenarios](#migration-scenarios)
+5. [Prerequisites](#prerequisites)
+6. [Challenge Overview](#challenge-overview)
+7. [Tasks](#tasks)
+8. [Troubleshooting](#troubleshooting)
+
+---
+
+## Why State Migration?
+
+### Real-World Scenarios
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    WHEN YOU NEED STATE MIGRATION                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  📁 Scenario 1: Local to Remote                                 │
+│  ─────────────────────────────────                              │
+│  You started with local state on your laptop.                   │
+│  Now the team needs to collaborate.                             │
+│  → Migrate to S3 backend                                        │
+│                                                                 │
+│  🏢 Scenario 2: Import Existing Resources                       │
+│  ──────────────────────────────────────────                     │
+│  Someone created resources manually in AWS Console.             │
+│  Now you need Terraform to manage them.                         │
+│  → Import into Terraform state                                  │
+│                                                                 │
+│  🔀 Scenario 3: Splitting Configurations                        │
+│  ────────────────────────────────────────                       │
+│  Your Terraform grew too large.                                 │
+│  Need to split into modules or separate states.                 │
+│  → Move resources between states                                │
+│                                                                 │
+│  🔄 Scenario 4: Backend Migration                               │
+│  ─────────────────────────────────                              │
+│  Company switching from Terraform Cloud to S3.                  │
+│  Or from one S3 bucket to another.                              │
+│  → Migrate between backends                                     │
+│                                                                 │
+│  🆘 Scenario 5: State Recovery                                  │
+│  ─────────────────────────────                                  │
+│  State file corrupted or lost.                                  │
+│  Need to rebuild state from existing resources.                 │
+│  → Import and reconstruct state                                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### The Cost of Getting It Wrong
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    ⚠️ STATE MIGRATION RISKS                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ❌ Wrong: terraform destroy + terraform apply                  │
+│     • Destroys production resources!                            │
+│     • Causes downtime                                           │
+│     • May lose data                                             │
+│                                                                 │
+│  ❌ Wrong: Manually editing state file                          │
+│     • Corrupts state                                            │
+│     • Creates drift                                             │
+│     • Breaks future operations                                  │
+│                                                                 │
+│  ✅ Right: Use Terraform state commands                         │
+│     • terraform state mv                                        │
+│     • terraform state rm                                        │
+│     • terraform import                                          │
+│     • terraform state pull/push                                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Understanding State Structure
+
+### What's in a State File?
+
+```json
+{
+  "version": 4,
+  "terraform_version": "1.5.0",
+  "serial": 42,
+  "lineage": "abc123-def456-...",
+  "outputs": {
+    "instance_ip": {
+      "value": "54.123.45.67",
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "web",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "i-0abc123def456",
+            "ami": "ami-12345678",
+            "instance_type": "t2.micro"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+### State File Components
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    STATE FILE STRUCTURE                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  version           → State format version (currently 4)         │
+│  terraform_version → Terraform version that wrote state         │
+│  serial            → Increments on every change                 │
+│  lineage           → Unique ID for this state (never changes)   │
+│  outputs           → Output values from configuration           │
+│  resources         → All managed resources                      │
+│                                                                 │
+│  Resource Addressing:                                           │
+│  ──────────────────                                             │
+│  aws_instance.web              → Single resource                │
+│  aws_instance.web[0]           → Resource with count            │
+│  aws_instance.web["key"]       → Resource with for_each         │
+│  module.app.aws_instance.web   → Resource in module             │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## State Commands Deep Dive
+
+### Essential State Commands
+
+```bash
+# List all resources in state
+terraform state list
+# Output:
+# aws_instance.web
+# aws_security_group.main
+# aws_vpc.main
+
+# Show details of a specific resource
+terraform state show aws_instance.web
+# Output:
+# resource "aws_instance" "web" {
+#     ami                    = "ami-12345678"
+#     instance_type          = "t2.micro"
+#     ...
+# }
+
+# Move/rename a resource
+terraform state mv aws_instance.web aws_instance.web_server
+# Moved aws_instance.web to aws_instance.web_server
+
+# Remove a resource from state (doesn't destroy it!)
+terraform state rm aws_instance.web
+# Removed aws_instance.web
+# The resource still exists in AWS, just not managed by TF
+
+# Import existing resource into state
+terraform import aws_instance.web i-0abc123def456
+# aws_instance.web: Importing...
+# aws_instance.web: Import successful!
+
+# Pull state to local file
+terraform state pull > state.json
+
+# Push local state file (DANGEROUS!)
+terraform state push state.json
+```
+
+### State Migration Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              LOCAL TO REMOTE MIGRATION WORKFLOW                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Step 1: Backup current state                                   │
+│  ────────────────────────────                                   │
+│  $ cp terraform.tfstate terraform.tfstate.backup                │
+│                                                                 │
+│  Step 2: Create remote backend (S3 bucket)                      │
+│  ────────────────────────────────────────────                   │
+│  $ aws s3 mb s3://my-terraform-state-bucket                     │
+│                                                                 │
+│  Step 3: Add backend configuration                              │
+│  ───────────────────────────────────                            │
+│  terraform {                                                    │
+│    backend "s3" {                                               │
+│      bucket = "my-terraform-state-bucket"                       │
+│      key    = "terraform.tfstate"                               │
+│      region = "us-east-1"                                       │
+│    }                                                            │
+│  }                                                              │
+│                                                                 │
+│  Step 4: Initialize with migration                              │
+│  ────────────────────────────────────                           │
+│  $ terraform init -migrate-state                                │
+│                                                                 │
+│  Terraform will ask:                                            │
+│  "Do you want to copy existing state to the new backend?"       │
+│  Answer: yes                                                    │
+│                                                                 │
+│  Step 5: Verify                                                 │
+│  ─────────────                                                  │
+│  $ terraform state list                                         │
+│  $ terraform plan  # Should show no changes                     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Import Workflow
+
+### Importing Existing Resources
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    IMPORT WORKFLOW                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Step 1: Write the resource configuration                       │
+│  ────────────────────────────────────────                       │
+│  # In main.tf                                                   │
+│  resource "aws_instance" "imported" {                           │
+│    # Start with minimal config                                  │
+│  }                                                              │
+│                                                                 │
+│  Step 2: Import the resource                                    │
+│  ─────────────────────────────                                  │
+│  $ terraform import aws_instance.imported i-0abc123def456       │
+│                                                                 │
+│  Step 3: Show the imported state                                │
+│  ──────────────────────────────────                             │
+│  $ terraform state show aws_instance.imported                   │
+│                                                                 │
+│  Step 4: Update configuration to match                          │
+│  ─────────────────────────────────────                          │
+│  # Copy attributes from state show to main.tf                   │
+│  resource "aws_instance" "imported" {                           │
+│    ami           = "ami-12345678"                               │
+│    instance_type = "t2.micro"                                   │
+│    # ... other attributes                                       │
+│  }                                                              │
+│                                                                 │
+│  Step 5: Verify no changes                                      │
+│  ─────────────────────────                                      │
+│  $ terraform plan                                               │
+│  # Should show "No changes"                                     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Import Block (Terraform 1.5+)
+
+```hcl
+# New way: import block (Terraform 1.5+)
+import {
+  to = aws_instance.imported
+  id = "i-0abc123def456"
+}
+
+resource "aws_instance" "imported" {
+  # Configuration here
+}
+
+# Run: terraform plan -generate-config-out=generated.tf
+# This generates the configuration automatically!
+```
+
+---
+
+## Prerequisites
+
+### For LocalStack (Free, Local)
+- ✅ Docker and Docker Compose installed
+- ✅ Terraform CLI installed (v1.5+)
+- ✅ Python 3 (for run.py)
+- ❌ No AWS account needed
+
+### For Real AWS
+- ✅ AWS Account ([Sign up free](https://aws.amazon.com/free/))
+- ✅ AWS CLI installed and configured
+- ✅ Terraform CLI installed (v1.5+)
+- ❌ Docker NOT required
+
+### Helpful Background
+- 📖 Completed [terraform-basics](https://github.com/techlearn-center/terraform-basics)
+- 📖 Completed [terraform-remote-state](https://github.com/techlearn-center/terraform-remote-state)
+- 📖 Completed [terraform-workspaces](https://github.com/techlearn-center/terraform-workspaces)
+
+---
+
+## Challenge Overview
+
+### Scenarios
+
+```
+terraform-state-migration/
+├── docker-compose.yml           # LocalStack
+├── README.md                    # This file
+├── run.py                       # Progress checker
+│
+├── scenario-1-local-to-remote/  # Migrate local state to S3
+│   ├── main.tf                  # Resources (provided)
+│   ├── backend.tf               # Backend config (TODO)
+│   └── migrate.sh               # Migration script (TODO)
+│
+├── scenario-2-import/           # Import existing resources
+│   ├── main.tf                  # Resource to import (TODO)
+│   ├── import.sh                # Import script (TODO)
+│   └── setup.sh                 # Creates resource to import
+│
+├── scenario-3-move/             # Move resources between states
+│   ├── old-project/             # Original project
+│   └── new-project/             # Move resources here
+│
+└── solutions/                   # Complete solutions
+```
+
+---
+
+## Tasks
+
+### Task 1: Local to Remote State Migration
+
+Migrate an existing local state file to an S3 backend.
+
+**Directory:** `scenario-1-local-to-remote/`
+
+**Objective:** You have a project with local state. Migrate it to S3.
+
+**Steps:**
+1. Review the existing `main.tf` and local state
+2. Create an S3 bucket for state storage (provided via script)
+3. Configure `backend.tf` with S3 backend
+4. Run migration with `terraform init -migrate-state`
+5. Verify state was migrated successfully
+
+```bash
+cd scenario-1-local-to-remote
+
+# See existing local state
+terraform state list
+
+# Your task: Add backend.tf and migrate
+# Then run:
+terraform init -migrate-state
+
+# Verify migration
+terraform plan  # Should show "No changes"
+```
+
+**Files to create/complete:**
+- `backend.tf` - S3 backend configuration
+
+---
+
+### Task 2: Import Existing Resources
+
+Import manually-created AWS resources into Terraform.
+
+**Directory:** `scenario-2-import/`
+
+**Objective:** A resource was created manually. Import it into Terraform.
+
+**Steps:**
+1. Run `setup.sh` to create a resource manually (simulating console creation)
+2. Write the resource configuration in `main.tf`
+3. Run `terraform import` with the resource ID
+4. Update configuration to match the imported resource
+5. Verify with `terraform plan` (should show no changes)
+
+```bash
+cd scenario-2-import
+
+# Create a resource "manually"
+./setup.sh
+
+# Your task: Write main.tf and import the resource
+terraform import aws_instance.imported <instance-id>
+
+# Show what was imported
+terraform state show aws_instance.imported
+
+# Update main.tf to match, then verify
+terraform plan  # Should show "No changes"
+```
+
+**Files to create/complete:**
+- `main.tf` - Resource configuration matching the imported resource
+- `import.sh` - Script to import the resource
+
+---
+
+### Task 3: Move Resources Between States
+
+Split a large Terraform project by moving resources to a new state.
+
+**Directory:** `scenario-3-move/`
+
+**Objective:** Move the database resources from `old-project` to `new-project`.
+
+**Steps:**
+1. Review resources in `old-project`
+2. Identify database resources to move
+3. Use `terraform state mv` to move resources
+4. Update configurations in both projects
+5. Verify both projects with `terraform plan`
+
+```bash
+cd scenario-3-move/old-project
+
+# List resources
+terraform state list
+# aws_instance.web
+# aws_db_instance.main
+# aws_security_group.web
+# aws_security_group.db
+
+# Move database resources to new-project
+terraform state mv -state-out=../new-project/terraform.tfstate \
+  aws_db_instance.main aws_db_instance.main
+
+terraform state mv -state-out=../new-project/terraform.tfstate \
+  aws_security_group.db aws_security_group.db
+
+# Verify both projects
+cd ../new-project
+terraform plan  # Should show no changes
+cd ../old-project
+terraform plan  # Should show no changes
+```
+
+**Files to complete:**
+- `old-project/main.tf` - Remove moved resources
+- `new-project/main.tf` - Add moved resources
+
+---
+
+### Task 4: State Recovery
+
+Practice recovering from a "lost" state file.
+
+**Directory:** `scenario-4-recovery/` (bonus)
+
+**Objective:** Rebuild state from existing AWS resources.
+
+This simulates a disaster scenario where state is lost but resources exist.
+
+```bash
+cd scenario-4-recovery
+
+# "Lose" the state file
+rm terraform.tfstate
+
+# Your task: Reconstruct state by importing all resources
+terraform import aws_instance.web <instance-id>
+terraform import aws_security_group.main <sg-id>
+# etc.
+
+# Verify
+terraform plan  # Should show no changes
+```
+
+---
+
+## Getting Started
+
+### Step 1: Start LocalStack
+
+```bash
+docker-compose up -d
+docker-compose ps
+```
+
+### Step 2: Initialize Scenario 1
+
+```bash
+cd scenario-1-local-to-remote
+terraform init
+terraform apply -auto-approve
+terraform state list
+```
+
+### Step 3: Complete Each Scenario
+
+Work through scenarios 1-4 in order.
+
+### Step 4: Check Progress
+
+```bash
+python run.py
+```
+
+---
+
+## How Grading Works
+
+### Local Progress Checker (`run.py`)
+
+```bash
+python run.py
+```
+
+### GitHub Actions (Automated Grading)
+
+| Component | Points | Requirements |
+|-----------|--------|--------------|
+| Scenario 1 Files | 3 | backend.tf exists and configured |
+| Scenario 1 Content | 3 | S3 backend, bucket, key, region |
+| Scenario 2 Files | 3 | main.tf with import resource |
+| Scenario 2 Content | 3 | aws_instance resource for import |
+| Scenario 3 Files | 4 | Both old and new project main.tf |
+| Scenario 3 Content | 2 | Resources properly split |
+| Documentation | 2 | migrate.sh and import.sh scripts |
+| **Total** | **20** | **75% needed to pass** |
+
+---
+
+## State Command Reference
+
+```bash
+# === LISTING ===
+terraform state list                    # List all resources
+terraform state list module.app         # List resources in module
+
+# === SHOWING ===
+terraform state show aws_instance.web   # Show resource details
+
+# === MOVING ===
+terraform state mv SOURCE DEST          # Move/rename resource
+terraform state mv -state-out=FILE ...  # Move to different state
+
+# === REMOVING ===
+terraform state rm aws_instance.web     # Remove from state (keeps resource!)
+
+# === IMPORTING ===
+terraform import ADDR ID                # Import existing resource
+
+# === PULLING/PUSHING ===
+terraform state pull > backup.json      # Download state
+terraform state push backup.json        # Upload state (careful!)
+
+# === REPLACING ===
+terraform state replace-provider OLD NEW  # Change provider
+
+# === REFRESHING ===
+terraform refresh                       # Update state from real resources
+```
+
+---
+
+## Troubleshooting
+
+### State Lock Issues
+
+```bash
+# Error: state is locked
+terraform force-unlock LOCK_ID
+
+# Prevent lock timeout
+export TF_LOCK_TIMEOUT=300s
+```
+
+### Backend Migration Errors
+
+```bash
+# Error: Backend configuration changed
+terraform init -reconfigure
+
+# Error: State not found
+terraform init -migrate-state
+```
+
+### Import Errors
+
+```bash
+# Error: Resource already in state
+terraform state rm aws_instance.web
+terraform import aws_instance.web i-xxx
+
+# Error: Configuration doesn't match
+# Run terraform state show and update your config
+```
+
+### State File Corruption
+
+```bash
+# Restore from backup
+cp terraform.tfstate.backup terraform.tfstate
+
+# If S3 versioning enabled
+aws s3api list-object-versions --bucket BUCKET --prefix KEY
+aws s3api get-object --bucket BUCKET --key KEY --version-id VER state.json
+```
+
+---
+
+## Best Practices
+
+### 1. Always Backup Before Migration
+
+```bash
+# Local state
+cp terraform.tfstate terraform.tfstate.backup
+
+# Remote state
+terraform state pull > state-backup-$(date +%Y%m%d).json
+```
+
+### 2. Use -dry-run When Available
+
+```bash
+# Check what would happen
+terraform plan
+```
+
+### 3. Enable State Versioning
+
+```hcl
+resource "aws_s3_bucket_versioning" "state" {
+  bucket = aws_s3_bucket.state.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+```
+
+### 4. Document All Migrations
+
+```bash
+# Keep a log
+echo "$(date): Migrated aws_instance.web from local to S3" >> migration.log
+```
+
+---
+
+## Next Steps
+
+After completing this challenge:
+
+1. **Advanced IAM**
+   - [aws-iam-advanced](https://github.com/techlearn-center/aws-iam-advanced)
+   - Roles, assume role, cross-account
+
+2. **CI/CD Integration**
+   - [cicd-pipeline](https://github.com/techlearn-center/cicd-pipeline)
+   - Automate Terraform in pipelines
+
+3. **Monitoring**
+   - [monitoring-stack](https://github.com/techlearn-center/monitoring-stack)
+   - Monitor your infrastructure
+
+---
+
+## Resources
+
+- [Terraform State Documentation](https://developer.hashicorp.com/terraform/language/state)
+- [Backend Configuration](https://developer.hashicorp.com/terraform/language/settings/backends/configuration)
+- [Import Documentation](https://developer.hashicorp.com/terraform/cli/import)
+- [State Command Reference](https://developer.hashicorp.com/terraform/cli/commands/state)
+
+---
+
+## License
+
+This challenge is part of the TechLearn Center curriculum.
+Free to use for educational purposes.
+
+---
+
+**Happy State Managing! 🔄**
+
+*Remember: Always backup before migrating!*
