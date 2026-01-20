@@ -397,6 +397,27 @@ resource "aws_instance" "imported" {
 - ✅ Terraform CLI installed (v1.5+)
 - ❌ Docker NOT required
 
+### Real AWS Setup
+
+```bash
+# 1. Install AWS CLI (if not installed)
+# Windows: https://awscli.amazonaws.com/AWSCLIV2.msi
+# Mac: brew install awscli
+# Linux: curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+
+# 2. Configure AWS credentials
+aws configure
+# Enter your:
+#   AWS Access Key ID: (from IAM console)
+#   AWS Secret Access Key: (from IAM console)
+#   Default region: us-east-1
+#   Default output format: json
+
+# 3. Verify configuration
+aws sts get-caller-identity
+# Should show your account ID and user ARN
+```
+
 ### Helpful Background
 - 📖 Completed [terraform-basics](https://github.com/techlearn-center/terraform-basics)
 - 📖 Completed [terraform-remote-state](https://github.com/techlearn-center/terraform-remote-state)
@@ -780,6 +801,247 @@ terraform import aws_security_group.main <sg-id>
 # Verify
 terraform plan  # Should show no changes
 ```
+
+---
+
+## Using Real AWS (Instead of LocalStack)
+
+If you want to use a real AWS account instead of LocalStack, follow these modified instructions for each task.
+
+### Real AWS: Task 1 - Local to Remote State Migration
+
+**Key Differences from LocalStack:**
+- Create a real S3 bucket (globally unique name required)
+- Remove LocalStack-specific backend settings
+- Resources will incur AWS charges (minimal for t2.micro)
+
+#### Step 1: Create S3 Bucket for State
+
+```bash
+# Choose a globally unique bucket name
+export STATE_BUCKET="terraform-state-$(aws sts get-caller-identity --query Account --output text)"
+
+# Create the bucket
+aws s3 mb s3://$STATE_BUCKET --region us-east-1
+
+# Enable versioning (best practice)
+aws s3api put-bucket-versioning \
+  --bucket $STATE_BUCKET \
+  --versioning-configuration Status=Enabled
+
+echo "Your bucket: $STATE_BUCKET"
+```
+
+#### Step 2: Update Provider Configuration
+
+Edit `scenario-1-local-to-remote/main.tf` - remove LocalStack settings:
+
+```hcl
+# Real AWS provider (remove all LocalStack-specific settings)
+provider "aws" {
+  region = "us-east-1"
+  # No endpoints, skip_*, or test credentials needed
+}
+```
+
+#### Step 3: Initialize with Local State
+
+```bash
+cd scenario-1-local-to-remote
+
+# Make sure backend.tf is COMMENTED OUT
+terraform init
+terraform apply -auto-approve
+terraform state list
+```
+
+#### Step 4: Configure S3 Backend
+
+Edit `backend.tf` for real AWS:
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket = "YOUR-BUCKET-NAME"  # Replace with your bucket
+    key    = "scenario-1/terraform.tfstate"
+    region = "us-east-1"
+
+    # Optional but recommended for real AWS:
+    encrypt        = true
+    dynamodb_table = "terraform-locks"  # For state locking
+  }
+}
+```
+
+#### Step 5: (Optional) Create DynamoDB Table for State Locking
+
+```bash
+aws dynamodb create-table \
+  --table-name terraform-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
+```
+
+#### Step 6: Migrate State
+
+```bash
+terraform init -migrate-state
+# Answer "yes" when prompted
+terraform plan
+# Should show "No changes"
+```
+
+#### Step 7: Verify in AWS Console
+
+```bash
+# List state file in S3
+aws s3 ls s3://$STATE_BUCKET/scenario-1/
+
+# Or check in AWS Console:
+# https://s3.console.aws.amazon.com/s3/buckets/YOUR-BUCKET
+```
+
+---
+
+### Real AWS: Task 2 - Import Existing Resources
+
+#### Step 1: Create a Resource Manually (AWS Console)
+
+1. Go to AWS Console: https://console.aws.amazon.com/ec2
+2. Click "Launch Instance"
+3. Configure:
+   - Name: `manually-created-instance`
+   - AMI: Amazon Linux 2023 (or any free tier AMI)
+   - Instance type: t2.micro (free tier)
+   - Key pair: Proceed without
+   - Security group: Create new, allow SSH
+4. Click "Launch Instance"
+5. **Copy the Instance ID** (e.g., `i-0abc123def456789`)
+
+Or use AWS CLI:
+
+```bash
+# Get latest Amazon Linux 2023 AMI
+AMI_ID=$(aws ec2 describe-images \
+  --owners amazon \
+  --filters "Name=name,Values=al2023-ami-*-x86_64" \
+  --query 'Images | sort_by(@, &CreationDate) | [-1].ImageId' \
+  --output text)
+
+# Launch instance
+INSTANCE_ID=$(aws ec2 run-instances \
+  --image-id $AMI_ID \
+  --instance-type t2.micro \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=manually-created-instance},{Key=CreatedBy,Value=console}]' \
+  --query 'Instances[0].InstanceId' \
+  --output text)
+
+echo "Instance ID: $INSTANCE_ID"
+```
+
+#### Step 2: Update Provider and Import
+
+Edit `scenario-2-import/main.tf` for real AWS:
+
+```hcl
+provider "aws" {
+  region = "us-east-1"
+}
+
+# Add minimal resource block
+resource "aws_instance" "imported" {
+  # Will fill in after import
+}
+```
+
+#### Step 3: Import the Resource
+
+```bash
+cd scenario-2-import
+terraform init
+terraform import aws_instance.imported i-YOUR-INSTANCE-ID
+terraform state show aws_instance.imported
+```
+
+#### Step 4: Update Configuration
+
+Copy the AMI and instance_type from the state show output to your main.tf:
+
+```hcl
+resource "aws_instance" "imported" {
+  ami           = "ami-XXXXXXXXX"  # From state show
+  instance_type = "t2.micro"
+
+  tags = {
+    Name      = "manually-created-instance"
+    CreatedBy = "console"
+  }
+}
+```
+
+#### Step 5: Verify
+
+```bash
+terraform plan
+# Should show "No changes"
+```
+
+#### Clean Up (Important - Avoid Charges!)
+
+```bash
+# Terminate the instance when done
+aws ec2 terminate-instances --instance-ids i-YOUR-INSTANCE-ID
+```
+
+---
+
+### Real AWS: Task 3 - Move Resources Between States
+
+Same process as LocalStack, but update providers in both projects:
+
+#### Step 1: Update Providers
+
+Edit both `old-project/main.tf` and `new-project/main.tf`:
+
+```hcl
+provider "aws" {
+  region = "us-east-1"
+  # Remove all LocalStack-specific settings
+}
+```
+
+#### Step 2: Follow LocalStack Steps
+
+The `terraform state mv` commands work identically with real AWS.
+
+#### Clean Up (Important!)
+
+```bash
+# After completing the exercise, destroy resources to avoid charges
+cd old-project
+terraform destroy -auto-approve
+
+cd ../new-project
+terraform destroy -auto-approve
+```
+
+---
+
+### Real AWS Cost Considerations
+
+| Resource | Cost | Free Tier |
+|----------|------|-----------|
+| t2.micro EC2 | ~$8.50/month | 750 hours/month free (first year) |
+| S3 State Storage | ~$0.023/GB | 5GB free |
+| DynamoDB (locks) | On-demand | 25 WCU/RCU free |
+
+**Tips to Minimize Costs:**
+1. Use t2.micro instances (free tier eligible)
+2. Destroy resources after each exercise
+3. Delete S3 buckets when done
+4. Don't leave instances running overnight
 
 ---
 
