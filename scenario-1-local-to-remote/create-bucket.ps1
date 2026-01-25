@@ -150,8 +150,10 @@ if ($Mode -eq "aws") {
     Write-Host "NOTE: Replace the entire S3 backend block with the above." -ForegroundColor Yellow
     Write-Host "      (The template has LocalStack settings - don't use those for Real AWS)"
     Write-Host ""
-    Write-Host "Then run:"
-    Write-Host "  terraform init -migrate-state"
+    Write-Host "Workflow:" -ForegroundColor Cyan
+    Write-Host "  1. First, use LOCAL backend: terraform init && terraform apply"
+    Write-Host "  2. Then update backend.tf to S3 (config above)"
+    Write-Host "  3. Migrate state: terraform init -migrate-state"
     Write-Host ""
 }
 else {

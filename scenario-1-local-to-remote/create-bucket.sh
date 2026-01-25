@@ -140,8 +140,10 @@ if [ "$MODE" = "aws" ]; then
     echo "NOTE: Replace the entire S3 backend block with the above."
     echo "      (The template has LocalStack settings - don't use those for Real AWS)"
     echo ""
-    echo "Then run:"
-    echo "  terraform init -migrate-state"
+    echo "Workflow:"
+    echo "  1. First, use LOCAL backend: terraform init && terraform apply"
+    echo "  2. Then update backend.tf to S3 (config above)"
+    echo "  3. Migrate state: terraform init -migrate-state"
     echo ""
 
 else
