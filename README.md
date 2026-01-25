@@ -14,6 +14,97 @@ Master the art of Terraform state management, migration, and disaster recovery.
 
 ---
 
+## Getting Started
+
+### Step 1: Get the Code
+
+Choose ONE of these options:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    HOW TO GET THE CODE                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  OPTION A: FORK (Recommended)                                   │
+│  ────────────────────────────                                   │
+│  ✅ You get your own copy on GitHub                             │
+│  ✅ You can push your changes                                   │
+│  ✅ GitHub Actions auto-grades your work                        │
+│  ✅ Shows on your GitHub profile                                │
+│                                                                 │
+│  OPTION B: CLONE ONLY                                           │
+│  ─────────────────────                                          │
+│  ✅ Quick start, no GitHub account needed                       │
+│  ✅ Local grading with python run.py                            │
+│  ❌ Cannot push changes to GitHub                               │
+│  ❌ No automated GitHub Actions grading                         │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Option A: Fork (Recommended for Full Experience)
+
+Forking creates YOUR OWN copy of this repository on GitHub.
+
+```bash
+# 1. Click the "Fork" button at the top-right of this page
+#    This creates: github.com/YOUR-USERNAME/terraform-state-migration
+
+# 2. Clone YOUR fork (not the original!)
+git clone https://github.com/YOUR-USERNAME/terraform-state-migration.git
+cd terraform-state-migration
+
+# 3. When you complete the challenge, push to YOUR fork
+git add .
+git commit -m "Complete terraform-state-migration challenge"
+git push origin main
+
+# 4. GitHub Actions will automatically grade your work!
+#    Check the "Actions" tab in your forked repo
+```
+
+**Why Fork?**
+- You own the copy - can modify freely
+- Push triggers GitHub Actions grading
+- Builds your GitHub portfolio
+- Can reference in job applications
+
+#### Option B: Clone Only (Quick Start)
+
+Just want to practice locally? Clone directly:
+
+```bash
+# Clone the original repo
+git clone https://github.com/techlearn-center/terraform-state-migration.git
+cd terraform-state-migration
+
+# Complete the challenge...
+
+# Grade locally (no GitHub needed)
+python run.py --verify
+```
+
+**Note:** You cannot push to `techlearn-center` repo (you don't have permission).
+To save your work on GitHub, you'll need to create your own repo:
+
+```bash
+# Create a new repo on github.com/new, then:
+git remote remove origin
+git remote add origin https://github.com/YOUR-USERNAME/YOUR-NEW-REPO.git
+git push -u origin main
+```
+
+### Step 2: Choose Your Infrastructure Path
+
+| Path | Cost | Best For |
+|------|------|----------|
+| 🐳 **LocalStack** | FREE | Learning, practice |
+| ☁️ **Real AWS** | ~$1-5 | Production experience |
+
+See detailed instructions for each path below.
+
+---
+
 ## What is Terraform State?
 
 ### The Problem State Solves
@@ -330,12 +421,12 @@ terraform state push backup.json
 - Docker Desktop installed and running
 - Terraform CLI installed
 - Python 3 (for grading script)
+- Code downloaded (see [Getting Started](#getting-started) above)
 
-### Step 1: Clone and Start
+### Step 1: Start LocalStack
 
 ```bash
-# Clone the repo
-git clone https://github.com/techlearn-center/terraform-state-migration.git
+# Navigate to your cloned/forked repo
 cd terraform-state-migration
 
 # Start LocalStack
@@ -464,6 +555,7 @@ git push origin main
 - AWS CLI installed and configured
 - Terraform CLI installed
 - Python 3 (for grading script)
+- Code downloaded (see [Getting Started](#getting-started) above)
 
 ### Step 1: Configure AWS
 
@@ -481,14 +573,7 @@ aws sts get-caller-identity
 # Should show your account ID
 ```
 
-### Step 2: Clone the Repo
-
-```bash
-git clone https://github.com/techlearn-center/terraform-state-migration.git
-cd terraform-state-migration
-```
-
-### Step 3: Modify Provider Configurations
+### Step 2: Modify Provider Configurations
 
 **IMPORTANT:** You must update the provider blocks in ALL scenario main.tf files.
 
@@ -518,7 +603,7 @@ provider "aws" {
 }
 ```
 
-### Step 4: Complete the Scenarios
+### Step 3: Complete the Scenarios
 
 #### Scenario 1: Local to Remote State Migration
 
@@ -641,7 +726,7 @@ cd ../old-project
 terraform state list > ../../evidence/scenario3-old-state.txt
 ```
 
-### Step 5: Collect AWS Identity Proof
+### Step 4: Collect AWS Identity Proof
 
 ```bash
 cd ../..  # Back to project root
@@ -655,14 +740,14 @@ aws sts get-caller-identity > evidence/aws-identity.txt
 # Save as evidence/screenshot-*.png
 ```
 
-### Step 6: Verify Your Work
+### Step 5: Verify Your Work
 
 ```bash
 # Run grading with AWS mode
 python run.py --verify --mode aws --evidence
 ```
 
-### Step 7: Clean Up AWS Resources (IMPORTANT!)
+### Step 6: Clean Up AWS Resources (IMPORTANT!)
 
 ```bash
 # Destroy resources to avoid charges
@@ -681,7 +766,7 @@ terraform destroy -auto-approve
 aws s3 rb s3://$STATE_BUCKET --force
 ```
 
-### Step 8: Submit
+### Step 7: Submit Your Work
 
 ```bash
 git add .
