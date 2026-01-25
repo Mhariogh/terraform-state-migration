@@ -771,25 +771,15 @@ provider "aws" {
 ```bash
 cd scenario-1-local-to-remote
 
-# Create S3 bucket for state (use your account ID for uniqueness)
-export STATE_BUCKET="tfstate-$(aws sts get-caller-identity --query Account --output text)"
-aws s3 mb s3://$STATE_BUCKET --region us-east-1
-aws s3api put-bucket-versioning --bucket $STATE_BUCKET --versioning-configuration Status=Enabled
-echo "Your bucket: $STATE_BUCKET"
+# Create S3 bucket using the script (auto-generates unique name)
+chmod +x create-bucket.sh
+./create-bucket.sh aws
+# Or specify your own bucket name:
+# ./create-bucket.sh aws my-company-tfstate
 
-# Update backend.tf with YOUR bucket name
-# Replace: bucket = "your-bucket-name"
-# With:    bucket = "tfstate-123456789012"  (your actual bucket)
-
-# Remove LocalStack-specific settings from backend.tf:
-# DELETE these lines:
-#   endpoints = { s3 = "http://localhost:4566" }
-#   skip_credentials_validation = true
-#   skip_metadata_api_check     = true
-#   skip_requesting_account_id  = true
-#   use_path_style              = true
-#   access_key                  = "test"
-#   secret_key                  = "test"
+# The script will output the exact backend.tf configuration to use.
+# Update backend.tf with the provided configuration.
+# REMOVE all LocalStack-specific settings (the script lists them).
 
 # Initialize with local state first (backend commented out)
 terraform init
@@ -798,7 +788,7 @@ terraform apply -auto-approve
 # Verify resources created
 terraform state list
 
-# Uncomment the S3 backend in backend.tf
+# Uncomment the S3 backend in backend.tf (with your bucket name)
 # Then migrate
 terraform init -migrate-state
 # Answer "yes"
@@ -811,7 +801,8 @@ terraform plan
 mkdir -p ../evidence
 terraform plan -no-color > ../evidence/scenario1-plan.txt
 terraform state list > ../evidence/scenario1-state.txt
-aws s3 ls s3://$STATE_BUCKET/ --recursive > ../evidence/s3-state-proof.txt
+# Use your actual bucket name from the script output:
+aws s3 ls s3://YOUR-BUCKET-NAME/ --recursive > ../evidence/s3-state-proof.txt
 ```
 
 #### Scenario 2: Import Existing Resources
@@ -892,23 +883,23 @@ terraform state list > ../../evidence/scenario3-old-state.txt
 ```bash
 cd ../../scenario-4-backend-migration
 
-# Create TWO S3 buckets for migration
-export BUCKET_A="tfstate-bucket-a-$(aws sts get-caller-identity --query Account --output text)"
-export BUCKET_B="tfstate-bucket-b-$(aws sts get-caller-identity --query Account --output text)"
+# Create TWO S3 buckets using the script (auto-generates unique names)
+chmod +x create-buckets.sh
+./create-buckets.sh aws
+# Or specify your own bucket names:
+# ./create-buckets.sh aws my-bucket-a my-bucket-b
 
-aws s3 mb s3://$BUCKET_A --region us-east-1
-aws s3 mb s3://$BUCKET_B --region us-east-1
-
-# Update backend-a.tf with $BUCKET_A
-# Update backend-b.tf.example with $BUCKET_B
-# Remove LocalStack-specific settings from both files
+# The script will output the exact backend configuration to use.
+# Update backend-a.tf with BUCKET_A name from script output
+# Update backend-b.tf.example with BUCKET_B name from script output
+# REMOVE all LocalStack-specific settings from both files
 
 # Initialize with Backend A
 terraform init
 terraform apply -auto-approve
 
-# Verify state in Bucket A
-aws s3 ls s3://$BUCKET_A/ --recursive
+# Verify state in Bucket A (use your actual bucket name)
+aws s3 ls s3://YOUR-BUCKET-A/ --recursive
 
 # Switch backends
 mv backend-a.tf backend-a.tf.bak
@@ -920,11 +911,11 @@ terraform init -migrate-state
 
 # Verify migration
 terraform plan  # Should show "No changes"
-aws s3 ls s3://$BUCKET_B/ --recursive  # State is now here
+aws s3 ls s3://YOUR-BUCKET-B/ --recursive  # State is now here
 
-# COLLECT EVIDENCE
+# COLLECT EVIDENCE (use your actual bucket names)
 terraform plan -no-color > ../evidence/scenario4-plan.txt
-aws s3 ls s3://$BUCKET_B/ --recursive > ../evidence/scenario4-bucket-b.txt
+aws s3 ls s3://YOUR-BUCKET-B/ --recursive > ../evidence/scenario4-bucket-b.txt
 ```
 
 #### Scenario 5: State Recovery
