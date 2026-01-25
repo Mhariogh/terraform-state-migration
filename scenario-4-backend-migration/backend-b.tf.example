@@ -1,0 +1,32 @@
+# Backend B Configuration
+# This is the TARGET backend - migrate state here
+
+# =====================================================
+# RENAME THIS FILE TO backend-b.tf BEFORE MIGRATING!
+# =====================================================
+#
+# After renaming:
+#   1. Delete or rename backend-a.tf (e.g., backend-a.tf.bak)
+#   2. Run: terraform init -migrate-state
+#   3. Answer "yes" when prompted
+#
+# =====================================================
+
+terraform {
+  backend "s3" {
+    bucket = "tfstate-bucket-b"
+    key    = "scenario-4/terraform.tfstate"
+    region = "us-east-1"
+
+    # LocalStack settings (remove for Real AWS)
+    endpoints = {
+      s3 = "http://localhost:4566"
+    }
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_requesting_account_id  = true
+    use_path_style              = true
+    access_key                  = "test"
+    secret_key                  = "test"
+  }
+}

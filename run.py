@@ -270,6 +270,108 @@ def grade_scenario_3_files():
     return checks
 
 
+def grade_scenario_4_files():
+    """Grade Scenario 4: Backend Migration - File checks only."""
+    print_section("Scenario 4: Backend Migration (Files)")
+
+    checks = []
+    base = "scenario-4-backend-migration"
+
+    # Check main.tf exists
+    if check_file_exists(f'{base}/main.tf'):
+        checks.append(check_passed("main.tf exists"))
+    else:
+        checks.append(check_failed("main.tf exists"))
+        return checks
+
+    # Check backend-a.tf exists (or .bak if migration done)
+    has_backend_a = check_file_exists(f'{base}/backend-a.tf') or \
+                    check_file_exists(f'{base}/backend-a.tf.bak')
+    if has_backend_a:
+        checks.append(check_passed("backend-a.tf exists"))
+    else:
+        checks.append(check_failed("backend-a.tf exists",
+            "Create backend-a.tf with source S3 bucket"))
+
+    # Check backend-b.tf exists (or .example if not yet migrated)
+    has_backend_b = check_file_exists(f'{base}/backend-b.tf') or \
+                    check_file_exists(f'{base}/backend-b.tf.example')
+    if has_backend_b:
+        checks.append(check_passed("backend-b.tf exists"))
+    else:
+        checks.append(check_failed("backend-b.tf exists",
+            "Create backend-b.tf with target S3 bucket"))
+
+    # Check create-buckets script exists
+    if check_file_exists(f'{base}/create-buckets.sh') or \
+       check_file_exists(f'{base}/create-buckets.ps1'):
+        checks.append(check_passed("create-buckets script exists"))
+    else:
+        checks.append(check_failed("create-buckets script exists"))
+
+    # Check if migration was completed (backend-b.tf is active, backend-a.tf.bak exists)
+    if check_file_exists(f'{base}/backend-b.tf') and \
+       check_file_exists(f'{base}/backend-a.tf.bak'):
+        checks.append(check_passed("Migration completed (backend files swapped)"))
+    else:
+        check_info("Migration not yet completed (backend-b.tf not active)")
+
+    return checks
+
+
+def grade_scenario_5_files():
+    """Grade Scenario 5: State Recovery - File checks only."""
+    print_section("Scenario 5: State Recovery (Files)")
+
+    checks = []
+    base = "scenario-5-state-recovery"
+
+    # Check main.tf exists
+    if check_file_exists(f'{base}/main.tf'):
+        checks.append(check_passed("main.tf exists"))
+    else:
+        checks.append(check_failed("main.tf exists"))
+        return checks
+
+    # Check main.tf has required resources
+    if check_file_contains(f'{base}/main.tf', 'aws_instance'):
+        checks.append(check_passed("aws_instance resource defined"))
+    else:
+        checks.append(check_failed("aws_instance resource defined"))
+
+    if check_file_contains(f'{base}/main.tf', 'aws_security_group'):
+        checks.append(check_passed("aws_security_group resource defined"))
+    else:
+        checks.append(check_failed("aws_security_group resource defined"))
+
+    if check_file_contains(f'{base}/main.tf', 'aws_ebs_volume'):
+        checks.append(check_passed("aws_ebs_volume resource defined"))
+    else:
+        checks.append(check_failed("aws_ebs_volume resource defined"))
+
+    # Check simulate-disaster script exists
+    if check_file_exists(f'{base}/simulate-disaster.sh') or \
+       check_file_exists(f'{base}/simulate-disaster.ps1'):
+        checks.append(check_passed("simulate-disaster script exists"))
+    else:
+        checks.append(check_failed("simulate-disaster script exists"))
+
+    # Check if state recovery was completed (terraform.tfstate exists)
+    if check_file_exists(f'{base}/terraform.tfstate'):
+        checks.append(check_passed("State file recovered (terraform.tfstate exists)"))
+        # Bonus: check state has the resources
+        if check_file_contains(f'{base}/terraform.tfstate', 'aws_instance.web'):
+            check_info("  State contains aws_instance.web")
+        if check_file_contains(f'{base}/terraform.tfstate', 'aws_security_group.web'):
+            check_info("  State contains aws_security_group.web")
+        if check_file_contains(f'{base}/terraform.tfstate', 'aws_ebs_volume.data'):
+            check_info("  State contains aws_ebs_volume.data")
+    else:
+        check_info("State not yet recovered (run terraform import commands)")
+
+    return checks
+
+
 # =============================================================================
 # LIVE TERRAFORM VERIFICATION
 # =============================================================================
@@ -367,6 +469,97 @@ def verify_scenario_2_live(mode="localstack"):
     return checks
 
 
+def verify_scenario_4_live(mode="localstack"):
+    """Verify Scenario 4 with live Terraform commands."""
+    print_section(f"Scenario 4: Live Verification ({mode.upper()})")
+
+    checks = []
+    base = "scenario-4-backend-migration"
+
+    # Check if backend-b.tf is active (migration done)
+    if not check_file_exists(f'{base}/backend-b.tf'):
+        check_info("Backend migration not yet completed")
+        check_info("Rename backend-b.tf.example to backend-b.tf")
+        return checks
+
+    # Check terraform init works
+    check_info("Running terraform init...")
+    success, output = run_command("terraform init -input=false", cwd=base, timeout=120)
+    if success:
+        checks.append(check_passed("terraform init succeeded"))
+    else:
+        checks.append(check_failed("terraform init succeeded"))
+        return checks
+
+    # Check terraform plan shows no changes
+    check_info("Running terraform plan...")
+    success, output = run_command("terraform plan -detailed-exitcode", cwd=base, timeout=120)
+    if "No changes" in output or success:
+        checks.append(check_passed("terraform plan shows no changes (migration complete!)"))
+    else:
+        checks.append(check_failed("terraform plan shows no changes"))
+
+    # Check state in bucket B
+    if mode == "localstack":
+        check_info("Checking state in target bucket...")
+        success, output = run_command(
+            "aws s3 ls s3://tfstate-bucket-b/ --endpoint-url http://localhost:4566 --recursive",
+            timeout=30
+        )
+        if success and "terraform.tfstate" in output:
+            checks.append(check_passed("State file exists in target bucket (bucket-b)"))
+        else:
+            checks.append(check_failed("State file in target bucket",
+                "Run: terraform init -migrate-state"))
+
+    return checks
+
+
+def verify_scenario_5_live(mode="localstack"):
+    """Verify Scenario 5 with live Terraform commands."""
+    print_section(f"Scenario 5: Live Verification ({mode.upper()})")
+
+    checks = []
+    base = "scenario-5-state-recovery"
+
+    # Check terraform init works
+    check_info("Running terraform init...")
+    success, output = run_command("terraform init -input=false", cwd=base, timeout=120)
+    if success:
+        checks.append(check_passed("terraform init succeeded"))
+    else:
+        checks.append(check_failed("terraform init succeeded"))
+        return checks
+
+    # Check state has resources (recovery done)
+    check_info("Checking recovered state...")
+    success, output = run_command("terraform state list", cwd=base, timeout=30)
+    if success and output.strip():
+        resources = [r.strip() for r in output.strip().split('\n') if r.strip()]
+        if len(resources) >= 3:
+            checks.append(check_passed(f"State recovered with {len(resources)} resources"))
+            for res in resources:
+                check_info(f"  Found: {res}")
+        else:
+            checks.append(check_failed("All 3 resources recovered",
+                "Import all: aws_instance.web, aws_security_group.web, aws_ebs_volume.data"))
+    else:
+        checks.append(check_failed("State has resources",
+            "Run: terraform import aws_instance.web <id>"))
+        return checks
+
+    # Check terraform plan shows no changes
+    check_info("Running terraform plan...")
+    success, output = run_command("terraform plan -detailed-exitcode", cwd=base, timeout=120)
+    if "No changes" in output or success:
+        checks.append(check_passed("terraform plan shows no changes (recovery complete!)"))
+    else:
+        checks.append(check_failed("terraform plan shows no changes",
+            "Update main.tf to match the imported resource attributes"))
+
+    return checks
+
+
 # =============================================================================
 # EVIDENCE FILE CHECKS
 # =============================================================================
@@ -385,26 +578,31 @@ def grade_evidence_files():
         check_info(f"Then add your verification outputs")
         return []
 
-    # Check for plan output
+    # Check for plan outputs (scenarios 1, 2, 4, 5)
     plan_files = list(Path(evidence_dir).glob("*plan*"))
     if plan_files:
-        checks.append(check_passed(f"Plan output found: {plan_files[0].name}"))
+        checks.append(check_passed(f"Plan outputs found: {len(plan_files)} file(s)"))
+        for f in plan_files[:4]:
+            check_info(f"  - {f.name}")
     else:
-        checks.append(check_failed("Plan output (e.g., scenario1-plan.txt)",
-            "Run: terraform plan > evidence/scenario1-plan.txt"))
+        checks.append(check_failed("Plan outputs (e.g., scenario1-plan.txt)",
+            "Run: terraform plan -no-color > evidence/scenarioX-plan.txt"))
 
-    # Check for state list output
+    # Check for state list outputs
     state_files = list(Path(evidence_dir).glob("*state*"))
     if state_files:
-        checks.append(check_passed(f"State output found: {state_files[0].name}"))
+        checks.append(check_passed(f"State outputs found: {len(state_files)} file(s)"))
+        for f in state_files[:4]:
+            check_info(f"  - {f.name}")
     else:
-        checks.append(check_failed("State list output (e.g., scenario1-state.txt)",
-            "Run: terraform state list > evidence/scenario1-state.txt"))
+        checks.append(check_failed("State list outputs (e.g., scenario1-state.txt)",
+            "Run: terraform state list > evidence/scenarioX-state.txt"))
 
     # Check for S3 verification
-    s3_files = list(Path(evidence_dir).glob("*s3*"))
+    s3_files = list(Path(evidence_dir).glob("*s3*")) + \
+               list(Path(evidence_dir).glob("*bucket*"))
     if s3_files:
-        checks.append(check_passed(f"S3 verification found: {s3_files[0].name}"))
+        checks.append(check_passed(f"S3 verification found: {len(s3_files)} file(s)"))
     else:
         checks.append(check_failed("S3 bucket listing (e.g., s3-state-proof.txt)",
             "Run: aws s3 ls s3://your-bucket/ --recursive > evidence/s3-state-proof.txt"))
@@ -507,6 +705,8 @@ Examples:
     all_checks.extend(grade_scenario_1_files())
     all_checks.extend(grade_scenario_2_files())
     all_checks.extend(grade_scenario_3_files())
+    all_checks.extend(grade_scenario_4_files())
+    all_checks.extend(grade_scenario_5_files())
 
     # =================================
     # LIVE VERIFICATION (Optional)
@@ -522,6 +722,8 @@ Examples:
         else:
             all_checks.extend(verify_scenario_1_live(args.mode))
             all_checks.extend(verify_scenario_2_live(args.mode))
+            all_checks.extend(verify_scenario_4_live(args.mode))
+            all_checks.extend(verify_scenario_5_live(args.mode))
 
     # =================================
     # EVIDENCE CHECKS (Optional)

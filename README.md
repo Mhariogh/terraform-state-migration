@@ -624,6 +624,64 @@ cd ../new-project
 terraform state list  # new-project: db only
 ```
 
+#### Scenario 4: Backend Migration
+
+```bash
+cd ../../scenario-4-backend-migration
+
+# Create both S3 buckets
+chmod +x create-buckets.sh
+./create-buckets.sh
+
+# Initialize with Backend A
+terraform init
+terraform apply -auto-approve
+
+# Verify state is in Bucket A
+aws s3 ls s3://tfstate-bucket-a/ --recursive --endpoint-url http://localhost:4566
+
+# Switch backends: rename files
+mv backend-a.tf backend-a.tf.bak
+mv backend-b.tf.example backend-b.tf
+
+# Migrate state to Backend B
+terraform init -migrate-state
+# Answer "yes" when prompted
+
+# Verify migration
+terraform plan
+# Should show: "No changes"
+
+# Verify state is now in Bucket B
+aws s3 ls s3://tfstate-bucket-b/ --recursive --endpoint-url http://localhost:4566
+```
+
+#### Scenario 5: State Recovery
+
+```bash
+cd ../scenario-5-state-recovery
+
+# Simulate a disaster (creates resources, deletes state)
+chmod +x simulate-disaster.sh
+./simulate-disaster.sh
+# Note the Resource IDs from output!
+
+# Initialize Terraform
+terraform init
+
+# See the problem - Terraform wants to CREATE (but resources exist!)
+terraform plan
+
+# Import each resource to recover state
+terraform import aws_instance.web <INSTANCE_ID>
+terraform import aws_security_group.web <SECURITY_GROUP_ID>
+terraform import aws_ebs_volume.data <VOLUME_ID>
+
+# Verify recovery
+terraform plan
+# Should show: "No changes"
+```
+
 ### Step 3: Verify Your Work
 
 ```bash
@@ -829,6 +887,100 @@ cd ../old-project
 terraform state list > ../../evidence/scenario3-old-state.txt
 ```
 
+#### Scenario 4: Backend Migration
+
+```bash
+cd ../../scenario-4-backend-migration
+
+# Create TWO S3 buckets for migration
+export BUCKET_A="tfstate-bucket-a-$(aws sts get-caller-identity --query Account --output text)"
+export BUCKET_B="tfstate-bucket-b-$(aws sts get-caller-identity --query Account --output text)"
+
+aws s3 mb s3://$BUCKET_A --region us-east-1
+aws s3 mb s3://$BUCKET_B --region us-east-1
+
+# Update backend-a.tf with $BUCKET_A
+# Update backend-b.tf.example with $BUCKET_B
+# Remove LocalStack-specific settings from both files
+
+# Initialize with Backend A
+terraform init
+terraform apply -auto-approve
+
+# Verify state in Bucket A
+aws s3 ls s3://$BUCKET_A/ --recursive
+
+# Switch backends
+mv backend-a.tf backend-a.tf.bak
+mv backend-b.tf.example backend-b.tf
+
+# Migrate state
+terraform init -migrate-state
+# Answer "yes"
+
+# Verify migration
+terraform plan  # Should show "No changes"
+aws s3 ls s3://$BUCKET_B/ --recursive  # State is now here
+
+# COLLECT EVIDENCE
+terraform plan -no-color > ../evidence/scenario4-plan.txt
+aws s3 ls s3://$BUCKET_B/ --recursive > ../evidence/scenario4-bucket-b.txt
+```
+
+#### Scenario 5: State Recovery
+
+```bash
+cd ../scenario-5-state-recovery
+
+# Create resources manually (simulating orphaned resources)
+AMI_ID=$(aws ec2 describe-images \
+  --owners amazon \
+  --filters "Name=name,Values=al2023-ami-*-x86_64" \
+  --query 'Images | sort_by(@, &CreationDate) | [-1].ImageId' \
+  --output text)
+
+INSTANCE_ID=$(aws ec2 run-instances \
+  --image-id $AMI_ID \
+  --instance-type t2.micro \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=recovery-web-server}]' \
+  --query 'Instances[0].InstanceId' \
+  --output text)
+
+SG_ID=$(aws ec2 create-security-group \
+  --group-name "recovery-web-sg" \
+  --description "Recovery test" \
+  --query 'GroupId' \
+  --output text)
+
+VOLUME_ID=$(aws ec2 create-volume \
+  --availability-zone us-east-1a \
+  --size 100 \
+  --volume-type gp3 \
+  --query 'VolumeId' \
+  --output text)
+
+echo "Instance: $INSTANCE_ID, SG: $SG_ID, Volume: $VOLUME_ID"
+
+# Initialize (no state exists)
+terraform init
+
+# Import resources to rebuild state
+terraform import aws_instance.web $INSTANCE_ID
+terraform import aws_security_group.web $SG_ID
+terraform import aws_ebs_volume.data $VOLUME_ID
+
+# Update main.tf to match imported attributes
+terraform state show aws_instance.web
+# Update ami, instance_type in main.tf
+
+# Verify recovery
+terraform plan  # Should show "No changes"
+
+# COLLECT EVIDENCE
+terraform plan -no-color > ../evidence/scenario5-plan.txt
+terraform state list > ../evidence/scenario5-state.txt
+```
+
 ### Step 4: Collect AWS Identity Proof
 
 ```bash
@@ -979,12 +1131,23 @@ terraform-state-migration/
 │   ├── scenario1-plan.txt
 │   ├── scenario1-state.txt
 │   ├── s3-state-proof.txt
+│   ├── scenario4-plan.txt
+│   ├── scenario5-state.txt
 │   └── aws-identity.txt
 ├── scenario-1-local-to-remote/  # State migration task
 ├── scenario-2-import/           # Import existing resources
 ├── scenario-3-move/             # Move between states
 │   ├── old-project/
 │   └── new-project/
+├── scenario-4-backend-migration/ # Migrate between backends
+│   ├── main.tf
+│   ├── backend-a.tf             # Source backend
+│   ├── backend-b.tf.example     # Target backend (rename to .tf)
+│   └── create-buckets.sh
+├── scenario-5-state-recovery/   # Recover from lost state
+│   ├── main.tf
+│   ├── simulate-disaster.sh
+│   └── README.md
 └── solutions/                   # Reference solutions
 ```
 
@@ -994,12 +1157,14 @@ terraform-state-migration/
 
 | Component | Points |
 |-----------|--------|
-| Scenario 1: Files correct | 6 |
-| Scenario 2: Files correct | 4 |
-| Scenario 3: Files correct | 4 |
-| Live Verification (optional) | 6 |
+| Scenario 1: Local to Remote Migration | 5 |
+| Scenario 2: Import Existing Resources | 4 |
+| Scenario 3: Move Resources Between States | 4 |
+| Scenario 4: Backend Migration | 4 |
+| Scenario 5: State Recovery | 4 |
+| Live Verification (optional) | 4 |
 | Evidence Files (Real AWS) | 5 |
-| **Total** | **25** |
+| **Total** | **30** |
 | **Passing Score** | **60%** |
 
 ---
