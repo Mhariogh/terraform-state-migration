@@ -186,6 +186,109 @@ When you run `terraform apply`, Terraform needs to know:
 
 ---
 
+## What is a Terraform Backend?
+
+> **Important:** A Terraform "backend" is NOT the same as a web application backend (like in "frontend/backend" architecture). In Terraform, a **backend** simply means **where your state file is stored**.
+
+### Backend = State Storage Location
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TERRAFORM BACKEND CONCEPT                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   Web Development:                                              │
+│   Frontend (React) ←──→ Backend (Node.js API) ←──→ Database     │
+│                                                                 │
+│   Terraform:                                                    │
+│   Terraform CLI ←──→ Backend (State Storage) ←──→ Cloud (AWS)   │
+│                                                                 │
+│   Backend in Terraform = WHERE the state file lives             │
+│   • Local disk? (terraform.tfstate file)                        │
+│   • S3 bucket?                                                  │
+│   • Azure Blob?                                                 │
+│   • Terraform Cloud?                                            │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Available Terraform Backends
+
+| Backend | Provider | Use Case | State Locking |
+|---------|----------|----------|---------------|
+| **local** | - | Development, learning, single user | No |
+| **s3** | AWS | Team collaboration, production AWS | Yes (with DynamoDB) |
+| **azurerm** | Azure | Production Azure environments | Yes |
+| **gcs** | GCP | Production Google Cloud environments | Yes |
+| **remote** | Terraform Cloud | Enterprise, managed solution | Yes |
+| **consul** | HashiCorp | Service mesh environments | Yes |
+| **pg** | PostgreSQL | Self-hosted, database storage | Yes |
+| **http** | Any | Custom REST API storage | Depends |
+
+### Backend Comparison
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    WHICH BACKEND TO USE?                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  👤 Solo Developer / Learning                                   │
+│     → local (default, no config needed)                         │
+│                                                                 │
+│  👥 Team on AWS                                                 │
+│     → s3 + DynamoDB (this challenge!)                           │
+│     • State in S3 bucket                                        │
+│     • Locking via DynamoDB table                                │
+│     • Encryption at rest                                        │
+│                                                                 │
+│  👥 Team on Azure                                               │
+│     → azurerm                                                   │
+│     • State in Azure Blob Storage                               │
+│     • Built-in locking                                          │
+│                                                                 │
+│  👥 Team on GCP                                                 │
+│     → gcs                                                       │
+│     • State in Google Cloud Storage                             │
+│     • Built-in locking                                          │
+│                                                                 │
+│  🏢 Enterprise / Multi-Cloud                                    │
+│     → remote (Terraform Cloud)                                  │
+│     • Managed solution                                          │
+│     • UI, RBAC, audit logs                                      │
+│     • Free tier available                                       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### This Challenge: AWS S3 Backend
+
+In this challenge, we use the **S3 backend** because:
+- Most common in AWS environments
+- Industry standard for production
+- Supports state locking (with DynamoDB)
+- Versioning for state history
+- Encryption for security
+
+```hcl
+# Example S3 Backend Configuration
+terraform {
+  backend "s3" {
+    bucket         = "my-terraform-state"
+    key            = "prod/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "terraform-locks"  # For state locking
+  }
+}
+```
+
+**Learn More:**
+- [Terraform Backend Configuration](https://developer.hashicorp.com/terraform/language/settings/backends/configuration)
+- [S3 Backend Documentation](https://developer.hashicorp.com/terraform/language/settings/backends/s3)
+- [Backend Types](https://developer.hashicorp.com/terraform/language/settings/backends/local)
+
+---
+
 ## Why State Migration?
 
 ### Real-World Scenarios
