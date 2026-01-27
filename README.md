@@ -791,6 +791,13 @@ docker-compose ps
 
 ### Step 2: Complete the Scenarios
 
+> **Quick Checklist for Each Scenario:**
+> 1. `cd` into the scenario directory
+> 2. Run the setup script (if any)
+> 3. Run `terraform init`
+> 4. Follow the scenario-specific steps
+> 5. Verify with `terraform plan` → should show "No changes"
+
 #### Scenario 1: Local to Remote State Migration
 
 ```bash
@@ -800,8 +807,11 @@ cd scenario-1-local-to-remote
 chmod +x create-bucket.sh
 ./create-bucket.sh
 
-# Initialize with LOCAL state first
-# (backend.tf should have S3 backend COMMENTED OUT)
+# Check backend.tf - it should have the S3 backend block COMMENTED OUT
+# (lines starting with # are comments)
+# If not commented, add # at the start of each line in the backend "s3" block
+
+# Initialize with LOCAL state first (no S3 backend yet)
 terraform init
 terraform apply -auto-approve
 
@@ -809,7 +819,8 @@ terraform apply -auto-approve
 terraform state list
 # Should show: aws_instance.web, aws_security_group.web
 
-# Now uncomment the S3 backend in backend.tf
+# Now UNCOMMENT the S3 backend in backend.tf
+# Remove the # from the beginning of each line in the backend "s3" block
 # Then migrate state to S3
 terraform init -migrate-state
 # Answer "yes" when prompted
@@ -827,7 +838,17 @@ cd ../scenario-2-import
 # Create a resource "manually" (simulating AWS Console)
 chmod +x setup.sh
 ./setup.sh
-# ⚠️ Note the Instance ID from output (format: i-xxx)
+
+# ⚠️ The script output will show:
+# ==============================================
+#   MANUALLY CREATED RESOURCE (LocalStack)
+# ==============================================
+#
+# Instance ID: i-abc123def456      ← USE THIS for terraform import
+# AMI ID:      ami-12345678        ← USE THIS in main.tf
+# Type:        t2.micro
+#
+# SAVE THESE VALUES! You need them below.
 
 # Initialize Terraform
 terraform init
@@ -835,7 +856,7 @@ terraform init
 # Add EMPTY resource block to main.tf (if not already there):
 # resource "aws_instance" "imported" { }
 
-# Import the existing resource (use INSTANCE ID from setup.sh)
+# Import the existing resource (use INSTANCE ID from setup.sh output)
 terraform import aws_instance.imported <INSTANCE_ID>
 # Example: terraform import aws_instance.imported i-abc123def456
 
@@ -843,9 +864,18 @@ terraform import aws_instance.imported <INSTANCE_ID>
 terraform state show aws_instance.imported
 
 # Update main.tf with required attributes from state show:
-# - ami (format: ami-xxx) ← NOT the instance ID!
-# - instance_type
-# - tags
+# ┌────────────────────────────────────────────────────────────┐
+# │ resource "aws_instance" "imported" {                       │
+# │   ami           = "ami-12345678"  # ← AMI ID from script   │
+# │   instance_type = "t2.micro"                               │
+# │                                                            │
+# │   tags = {                                                 │
+# │     Name      = "manually-created-instance"                │
+# │     CreatedBy = "console"                                  │
+# │   }                                                        │
+# │ }                                                          │
+# └────────────────────────────────────────────────────────────┘
+# ⚠️ ami must be AMI ID (ami-xxx), NOT Instance ID (i-xxx)!
 
 # Verify import succeeded
 terraform plan
@@ -937,22 +967,38 @@ cd ../scenario-5-state-recovery
 # Simulate a disaster (creates resources, deletes state)
 chmod +x simulate-disaster.sh
 ./simulate-disaster.sh
-# Note the Resource IDs from output!
+
+# ⚠️ SAVE the Resource IDs from output:
+#   - Instance ID: i-xxx (for aws_instance.web)
+#   - Security Group ID: sg-xxx (for aws_security_group.web)
+#   - Volume ID: vol-xxx (for aws_ebs_volume.data)
 
 # Initialize Terraform
 terraform init
 
 # See the problem - Terraform wants to CREATE (but resources exist!)
 terraform plan
+# Will show "3 to add" - because Terraform doesn't know they exist!
 
 # Import each resource to recover state
 terraform import aws_instance.web <INSTANCE_ID>
 terraform import aws_security_group.web <SECURITY_GROUP_ID>
 terraform import aws_ebs_volume.data <VOLUME_ID>
 
+# View imported attributes
+terraform state show aws_instance.web
+terraform state show aws_security_group.web
+terraform state show aws_ebs_volume.data
+
+# Update main.tf to match imported attributes:
+# - For aws_instance.web: update ami (from state show), instance_type, tags
+# - For aws_security_group.web: name, description, ingress/egress rules
+# - For aws_ebs_volume.data: availability_zone, size, type
+
 # Verify recovery
 terraform plan
 # Should show: "No changes"
+# If it shows changes, update main.tf to match state show output
 ```
 
 ### Step 3: Verify Your Work
