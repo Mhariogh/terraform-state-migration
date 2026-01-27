@@ -837,21 +837,40 @@ cd ../scenario-3-move/old-project
 terraform init
 terraform apply -auto-approve
 terraform state list
-# Shows: aws_instance.web, aws_instance.db, etc.
+# Shows: aws_instance.web, aws_instance.db, aws_security_group.web, aws_security_group.db
 
-# Initialize new project
+# Initialize new project (creates empty state file)
 cd ../new-project
 terraform init
 
-# Go back and move database resources
+# Go back to old-project to move database resources
 cd ../old-project
+
+# Move BOTH database resources (security group first, then instance)
+terraform state mv -state-out=../new-project/terraform.tfstate \
+  aws_security_group.db aws_security_group.db
+
 terraform state mv -state-out=../new-project/terraform.tfstate \
   aws_instance.db aws_instance.db
 
-# Verify both projects
-terraform state list  # old-project: web only
+# Verify resources were moved
+terraform state list
+# Should show: aws_instance.web, aws_security_group.web (db resources gone)
+
 cd ../new-project
-terraform state list  # new-project: db only
+terraform state list
+# Should show: aws_instance.db, aws_security_group.db
+
+# ⚠️ IMPORTANT: Now update both main.tf files!
+# 1. old-project/main.tf: Comment out aws_instance.db and aws_security_group.db blocks
+# 2. new-project/main.tf: Uncomment the db resource blocks (already provided as comments)
+
+# Verify both projects - should show "No changes"
+cd ../old-project
+terraform plan
+
+cd ../new-project
+terraform plan
 ```
 
 #### Scenario 4: Backend Migration
@@ -1090,23 +1109,45 @@ terraform state show aws_instance.imported > ../evidence/scenario2-import.txt
 ```bash
 cd ../scenario-3-move/old-project
 
+# ⚠️ FIRST: Update provider in BOTH old-project/main.tf AND new-project/main.tf
+# Replace LocalStack provider with Real AWS provider (see Step 2)
+
 # Initialize and create resources
 terraform init
 terraform apply -auto-approve
+terraform state list
+# Shows: aws_instance.web, aws_instance.db, aws_security_group.web, aws_security_group.db
 
 # Initialize new project
 cd ../new-project
 terraform init
 cd ../old-project
 
-# Move database to new project
+# Move BOTH database resources (security group first, then instance)
+terraform state mv -state-out=../new-project/terraform.tfstate \
+  aws_security_group.db aws_security_group.db
+
 terraform state mv -state-out=../new-project/terraform.tfstate \
   aws_instance.db aws_instance.db
 
-# Verify
+# Verify moves succeeded
 terraform state list
+# Should show: aws_instance.web, aws_security_group.web
+
 cd ../new-project
 terraform state list
+# Should show: aws_instance.db, aws_security_group.db
+
+# ⚠️ IMPORTANT: Update both main.tf files!
+# 1. old-project/main.tf: Comment out aws_instance.db and aws_security_group.db
+# 2. new-project/main.tf: Uncomment the db resource blocks
+
+# Verify both projects - must show "No changes"
+cd ../old-project
+terraform plan
+
+cd ../new-project
+terraform plan
 
 # COLLECT EVIDENCE
 terraform state list > ../../evidence/scenario3-new-state.txt
@@ -1122,28 +1163,53 @@ cd ../../scenario-4-backend-migration
 # Create TWO S3 buckets using the script (auto-generates unique names)
 chmod +x create-buckets.sh
 ./create-buckets.sh aws
-# Or specify your own bucket names:
-# ./create-buckets.sh aws my-bucket-a my-bucket-b
+# ⚠️ SAVE the bucket names from the output! Example:
+#   Source: s3://tfstate-a-abc123
+#   Target: s3://tfstate-b-abc123
 
-# The script will output the exact backend configuration to use.
-# Update backend-a.tf with BUCKET_A name from script output
-# Update backend-b.tf.example with BUCKET_B name from script output
-# REMOVE all LocalStack-specific settings from both files
+# ⚠️ BEFORE running terraform init, update these files:
+#
+# 1. main.tf - Update provider to Real AWS:
+#    provider "aws" {
+#      region = "us-east-1"
+#    }
+#
+# 2. backend-a.tf - Update bucket name AND remove LocalStack settings:
+#    terraform {
+#      backend "s3" {
+#        bucket  = "tfstate-a-abc123"     # ← Your bucket A name
+#        key     = "scenario-4/terraform.tfstate"
+#        region  = "us-east-1"
+#        encrypt = true
+#        # DELETE all the LocalStack settings (endpoints, skip_*, access_key, etc.)
+#      }
+#    }
+#
+# 3. backend-b.tf.example - Same updates (will use later):
+#    terraform {
+#      backend "s3" {
+#        bucket  = "tfstate-b-abc123"     # ← Your bucket B name
+#        key     = "scenario-4/terraform.tfstate"
+#        region  = "us-east-1"
+#        encrypt = true
+#        # DELETE all the LocalStack settings
+#      }
+#    }
 
-# Initialize with Backend A
+# NOW initialize with Backend A
 terraform init
 terraform apply -auto-approve
 
-# Verify state in Bucket A (use your actual bucket name)
+# Verify state in Bucket A (use YOUR bucket name)
 aws s3 ls s3://YOUR-BUCKET-A/ --recursive
 
-# Switch backends
+# Switch backends: rename files
 mv backend-a.tf backend-a.tf.bak
 mv backend-b.tf.example backend-b.tf
 
-# Migrate state
+# Migrate state to Backend B
 terraform init -migrate-state
-# Answer "yes"
+# Answer "yes" when prompted
 
 # Verify migration
 terraform plan  # Should show "No changes"
