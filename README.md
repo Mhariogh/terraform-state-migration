@@ -120,6 +120,56 @@ git push origin main
 - Builds your GitHub portfolio
 - Can reference in job applications
 
+#### Keeping Your Fork Updated
+
+If you forked this repo earlier and need to get the latest updates (new instructions, fixes, etc.):
+
+```bash
+# Step 1: Add the original repo as "upstream" (only do this once)
+git remote add upstream https://github.com/techlearn-center/terraform-state-migration.git
+
+# Step 2: Fetch the latest changes from upstream
+git fetch upstream
+
+# Step 3: Merge upstream changes into your local main branch
+git checkout main
+git merge upstream/main
+
+# Step 4: Push the updates to YOUR fork on GitHub
+git push origin main
+```
+
+**Common scenarios:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                 SYNCING YOUR FORK WITH UPSTREAM                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  "I already forked but now there are new instructions"          │
+│  ─────────────────────────────────────────────────────          │
+│  Run: git fetch upstream && git merge upstream/main             │
+│                                                                 │
+│  "I get 'upstream does not exist' error"                        │
+│  ───────────────────────────────────────                        │
+│  Run: git remote add upstream https://github.com/techlearn-center/terraform-state-migration.git │
+│  Then try again                                                 │
+│                                                                 │
+│  "I have merge conflicts"                                       │
+│  ────────────────────────                                       │
+│  Your changes conflict with upstream changes.                   │
+│  Options:                                                       │
+│  1. Resolve manually (edit conflicted files, then git add/commit)│
+│  2. Keep your version: git checkout --ours <file>               │
+│  3. Take upstream version: git checkout --theirs <file>         │
+│                                                                 │
+│  "I want to start fresh"                                        │
+│  ───────────────────────                                        │
+│  Delete your fork on GitHub, fork again, and re-clone           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 #### Option B: Clone Only (Quick Start)
 
 Just want to practice locally? Clone directly:
