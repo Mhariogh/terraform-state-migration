@@ -880,6 +880,14 @@ terraform plan
 # Should show: "No changes"
 ```
 
+**Cleanup (Optional for LocalStack):**
+```bash
+# When done with this scenario, destroy resources:
+terraform destroy -auto-approve
+```
+
+---
+
 #### Scenario 2: Import Existing Resources
 
 **Step 2.1: Go to the scenario directory**
@@ -975,6 +983,14 @@ terraform plan
 If it shows "No changes" → Success!
 If it shows changes → Your main.tf values don't match. Run `terraform state show aws_instance.imported` again and copy the exact values.
 
+**Cleanup (Optional for LocalStack):**
+```bash
+# When done with this scenario, destroy resources:
+terraform destroy -auto-approve
+```
+
+---
+
 #### Scenario 3: Move Resources Between States
 
 ```bash
@@ -1020,6 +1036,18 @@ cd ../new-project
 terraform plan
 ```
 
+**Cleanup (Optional for LocalStack):**
+```bash
+# When done with this scenario, destroy resources in BOTH projects:
+cd ../old-project
+terraform destroy -auto-approve
+
+cd ../new-project
+terraform destroy -auto-approve
+```
+
+---
+
 #### Scenario 4: Backend Migration
 
 ```bash
@@ -1051,6 +1079,14 @@ terraform plan
 # Verify state is now in Bucket B
 aws s3 ls s3://tfstate-bucket-b/ --recursive --endpoint-url http://localhost:4566
 ```
+
+**Cleanup (Optional for LocalStack):**
+```bash
+# When done with this scenario, destroy resources:
+terraform destroy -auto-approve
+```
+
+---
 
 #### Scenario 5: State Recovery
 
@@ -1093,6 +1129,14 @@ terraform plan
 # Should show: "No changes"
 # If it shows changes, update main.tf to match state show output
 ```
+
+**Cleanup (Optional for LocalStack):**
+```bash
+# When done with this scenario, destroy resources:
+terraform destroy -auto-approve
+```
+
+---
 
 ### Step 3: Verify Your Work
 
@@ -1216,6 +1260,17 @@ terraform state list > ../evidence/scenario1-state.txt
 # Use your actual bucket name from the script output:
 aws s3 ls s3://YOUR-BUCKET-NAME/ --recursive > ../evidence/s3-state-proof.txt
 ```
+
+**⚠️ Cleanup (IMPORTANT for Real AWS to avoid charges):**
+```bash
+# After collecting evidence, destroy resources:
+terraform destroy -auto-approve
+
+# Delete the S3 bucket (use your actual bucket name):
+aws s3 rb s3://YOUR-BUCKET-NAME --force
+```
+
+---
 
 #### Scenario 2: Import Existing Resources
 
@@ -1355,6 +1410,14 @@ terraform plan -no-color > ../evidence/scenario2-plan.txt
 terraform state show aws_instance.imported > ../evidence/scenario2-import.txt
 ```
 
+**⚠️ Cleanup (IMPORTANT for Real AWS to avoid charges):**
+```bash
+# After collecting evidence, destroy resources:
+terraform destroy -auto-approve
+```
+
+---
+
 #### Scenario 3: Move Resources Between States
 
 ```bash
@@ -1405,6 +1468,18 @@ terraform state list > ../../evidence/scenario3-new-state.txt
 cd ../old-project
 terraform state list > ../../evidence/scenario3-old-state.txt
 ```
+
+**⚠️ Cleanup (IMPORTANT for Real AWS to avoid charges):**
+```bash
+# After collecting evidence, destroy resources in BOTH projects:
+cd ../old-project
+terraform destroy -auto-approve
+
+cd ../new-project
+terraform destroy -auto-approve
+```
+
+---
 
 #### Scenario 4: Backend Migration
 
@@ -1471,6 +1546,18 @@ terraform plan -no-color > ../evidence/scenario4-plan.txt
 aws s3 ls s3://YOUR-BUCKET-B/ --recursive > ../evidence/scenario4-bucket-b.txt
 ```
 
+**⚠️ Cleanup (IMPORTANT for Real AWS to avoid charges):**
+```bash
+# After collecting evidence, destroy resources:
+terraform destroy -auto-approve
+
+# Delete the S3 buckets (use your actual bucket names):
+aws s3 rb s3://YOUR-BUCKET-A --force
+aws s3 rb s3://YOUR-BUCKET-B --force
+```
+
+---
+
 #### Scenario 5: State Recovery
 
 ```bash
@@ -1525,6 +1612,14 @@ terraform plan  # Should show "No changes"
 terraform plan -no-color > ../evidence/scenario5-plan.txt
 terraform state list > ../evidence/scenario5-state.txt
 ```
+
+**⚠️ Cleanup (IMPORTANT for Real AWS to avoid charges):**
+```bash
+# After collecting evidence, destroy resources:
+terraform destroy -auto-approve
+```
+
+---
 
 ### Step 4: Collect AWS Identity Proof
 
