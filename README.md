@@ -736,6 +736,30 @@ After running `terraform import`, you must update your `main.tf` to match the re
 | 🐳 **LocalStack** | FREE | Learning, practice | Docker, Terraform |
 | ☁️ **Real AWS** | ~$1-5 | Production experience | AWS account, Terraform |
 
+### Important: Scenarios are Independent
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              ALL 5 SCENARIOS ARE INDEPENDENT                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Each scenario has its own directory and state file.            │
+│  They do NOT depend on each other.                              │
+│                                                                 │
+│  ✅ You can do them in ANY order                                │
+│  ✅ You can skip scenarios                                      │
+│  ✅ Completing one does NOT affect others                       │
+│  ✅ Each has its own main.tf, state, and setup scripts          │
+│                                                                 │
+│  Scenario 1: scenario-1-local-to-remote/                        │
+│  Scenario 2: scenario-2-import/                                 │
+│  Scenario 3: scenario-3-move/  (has old-project & new-project)  │
+│  Scenario 4: scenario-4-backend-migration/                      │
+│  Scenario 5: scenario-5-state-recovery/                         │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 # 🐳 LOCALSTACK PATH (Free, Recommended for Learning)
